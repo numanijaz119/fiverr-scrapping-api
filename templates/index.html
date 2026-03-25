@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fiverr Scraper</title>
+<style>
+:root {
+  --bg: #0d0f14;
+  --surface: #161820;
+  --surface2: #1e2030;
+  --accent: #1dbf73;
+  --accent-dim: #155c38;
+  --danger: #e05252;
+  --warning: #e0a04a;
+  --info: #4a90d9;
+  --purple: #9b7fe8;
+  --text: #e2e4ec;
+  --text-dim: #6b7080;
+  --border: #252838;
+  --log-bg: #090b0f;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  min-height: 100vh;
+}
+
+/* ── Header ── */
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 28px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.logo { color: var(--accent); font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+.logo span { color: var(--text-dim); font-weight: 400; font-size: 13px; margin-left: 6px; }
+
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+.status-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+  transition: all 0.3s;
+}
+
+.status-badge.running {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+.dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: background 0.3s;
+}
+
+.running .dot {
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+  animation: blink 1.4s ease-in-out infinite;
+}
+
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* ── Nav Tabs ── */
+nav {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  padding: 0 28px;
+  gap: 4px;
+}
+
+nav button {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim);
+  padding: 13px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+nav button:hover { color: var(--text); }
+nav button.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── Main layout ── */
+main { max-width: 860px; margin: 0 auto; padding: 28px 24px 60px; }
+
+.tab { display: none; }
+.tab.active { display: block; }
+
+/* ── Cards ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 22px 24px;
+  margin-bottom: 18px;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 18px;
+}
+
+/* ── Form elements ── */
+.form-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field.grow { flex: 1; min-width: 180px; }
+
+label {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="password"] {
+  background: var(--log-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 9px 12px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+  width: 100%;
+}
+
+input:focus { border-color: var(--accent); }
+input[type="number"] { width: 80px; }
+input::placeholder { color: var(--text-dim); }
+
+/* ── Buttons ── */
+.btn {
+  padding: 9px 18px;
+  border-radius: 6px;
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { filter: brightness(1.1); }
+.btn-primary:disabled { background: var(--accent-dim); color: #3a7a58; cursor: not-allowed; }
+
+.btn-danger { background: #2d1515; color: var(--danger); border: 1px solid #5a2222; }
+.btn-danger:hover { background: #3d2020; }
+
+.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { background: var(--border); }
+
+/* ── Log terminal ── */
+.log-wrap { position: relative; }
+
+.log-terminal {
+  background: var(--log-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  height: 360px;
+  overflow-y: auto;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.75;
+  scroll-behavior: smooth;
+}
+
+.log-terminal::-webkit-scrollbar { width: 6px; }
+.log-terminal::-webkit-scrollbar-track { background: transparent; }
+.log-terminal::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.empty-msg {
+  color: var(--text-dim);
+  text-align: center;
+  padding-top: 140px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.log-line { display: flex; gap: 8px; word-break: break-all; }
+.log-line .pfx { flex-shrink: 0; width: 14px; text-align: center; }
+
+.log-line.log  .pfx { color: var(--border); }
+.log-line.log  .msg { color: #8a92a8; }
+.log-line.info .pfx, .log-line.info .msg { color: var(--info); }
+.log-line.success .pfx, .log-line.success .msg { color: var(--accent); }
+.log-line.error .pfx, .log-line.error .msg { color: var(--danger); }
+.log-line.warning .pfx, .log-line.warning .msg { color: var(--warning); }
+.log-line.result .pfx, .log-line.result .msg { color: var(--purple); }
+
+/* ── Result bar ── */
+.result-bar {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  background: #0f1f17;
+  border: 1px solid #1e3d2a;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--accent);
+  word-break: break-all;
+}
+
+.result-bar.visible { display: flex; }
+.result-bar .path { flex: 1; opacity: 0.8; }
+.result-bar button { flex-shrink: 0; }
+
+/* ── Searchable dropdown ── */
+.search-select { position: relative; }
+
+.dropdown-list {
+  display: none;
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0; right: 0;
+  background: var(--surface2);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  max-height: 210px;
+  overflow-y: auto;
+  z-index: 200;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+
+.dropdown-list.open { display: block; }
+
+.dropdown-item {
+  padding: 9px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.15s;
+}
+
+.dropdown-item:hover { background: var(--surface); }
+.dropdown-item .kw-count { color: var(--text-dim); font-size: 11px; }
+.dropdown-empty { padding: 12px; color: var(--text-dim); font-size: 13px; }
+
+/* ── Settings ── */
+.setting-note {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 10px;
+  line-height: 1.6;
+}
+
+.setting-note a { color: var(--accent); text-decoration: none; }
+.setting-note a:hover { text-decoration: underline; }
+
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 13px;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: all 0.25s;
+  pointer-events: none;
+  z-index: 999;
+  max-width: 320px;
+}
+
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.success { border-color: var(--accent-dim); color: var(--accent); }
+.toast.error { border-color: #5a2222; color: var(--danger); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Fiverr Scraper <span>market research tool</span></div>
+  <div class="header-right">
+    <div class="status-badge" id="statusBadge">
+      <div class="dot"></div>
+      <span id="statusText">Idle</span>
+    </div>
+  </div>
+</header>
+
+<nav>
+  <button class="active" onclick="switchTab('scrape', this)">Scrape</button>
+  <button onclick="switchTab('analyze', this)">Analyze</button>
+  <button onclick="switchTab('settings', this)">Settings</button>
+</nav>
+
+<main>
+
+<!-- ═══ SCRAPE TAB ═══ -->
+<div class="tab active" id="tab-scrape">
+  <div class="card">
+    <div class="card-title">Scrape Fiverr Gigs</div>
+    <div class="form-row">
+      <div class="field grow">
+        <label>Keyword</label>
+        <input type="text" id="scrapeKeyword" placeholder="e.g. web development, logo design"
+          onkeydown="if(event.key==='Enter') startScrape()">
+      </div>
+      <div class="field">
+        <label>Pages</label>
+        <input type="number" id="scrapePages" value="1" min="1" max="100">
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button class="btn btn-primary" id="scrapeBtn" onclick="startScrape()">Start Scraping</button>
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button class="btn btn-danger" id="stopScrapeBtn" onclick="stopJob()" style="display:none">Stop</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Output Log</div>
+    <div class="log-terminal" id="scrapeLog">
+      <div class="empty-msg">Enter a keyword above and click "Start Scraping"</div>
+    </div>
+    <div class="result-bar" id="scrapeResult">
+      <span class="path" id="scrapeResultPath"></span>
+      <button class="btn btn-secondary" onclick="openFolder('scrapeResultPath')">Open Folder</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ANALYZE TAB ═══ -->
+<div class="tab" id="tab-analyze">
+  <div class="card">
+    <div class="card-title">Analyze Scraped Data</div>
+    <div class="form-row">
+      <div class="field grow">
+        <label>Select Keyword</label>
+        <div class="search-select" id="analyzeSelectWrap">
+          <input type="text" id="analyzeInput" placeholder="Search or select a scraped keyword..."
+            autocomplete="off"
+            oninput="filterKeywords()"
+            onfocus="openDropdown()">
+          <input type="hidden" id="analyzeKeyword">
+          <div class="dropdown-list" id="keywordDropdown"></div>
+        </div>
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button class="btn btn-primary" id="analyzeBtn" onclick="startAnalyze()">Analyze</button>
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button class="btn btn-danger" id="stopAnalyzeBtn" onclick="stopJob()" style="display:none">Stop</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Output Log</div>
+    <div class="log-terminal" id="analyzeLog">
+      <div class="empty-msg">Select a keyword above and click "Analyze"</div>
+    </div>
+    <div class="result-bar" id="analyzeResult">
+      <span class="path" id="analyzeResultPath"></span>
+      <button class="btn btn-secondary" onclick="openFolder('analyzeResultPath')">Open Output Folder</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SETTINGS TAB ═══ -->
+<div class="tab" id="tab-settings">
+  <div class="card">
+    <div class="card-title">ScraperAPI Configuration</div>
+    <div class="form-row">
+      <div class="field grow">
+        <label>API Key</label>
+        <input type="password" id="apiKey" placeholder="Enter your ScraperAPI key"
+          onkeydown="if(event.key==='Enter') saveConfig()">
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button class="btn btn-primary" onclick="saveConfig()">Save Key</button>
+      </div>
+    </div>
+    <p class="setting-note">
+      The scraper uses ScraperAPI to reliably access Fiverr without getting blocked.<br>
+      Get your free API key at <a href="https://www.scraperapi.com" target="_blank">scraperapi.com</a>
+      (free tier: 5,000 requests/month).
+    </p>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Quick Reference</div>
+    <p class="setting-note" style="margin:0; line-height:2">
+      <strong style="color:var(--text)">Scrape:</strong> Enter a keyword and number of pages → logs stream live as gigs are scraped<br>
+      <strong style="color:var(--text)">Analyze:</strong> Select any scraped keyword → generates a consolidated JSON report in <code style="color:var(--purple)">keyword_analysis/</code><br>
+      <strong style="color:var(--text)">Output:</strong> Gig data is saved in <code style="color:var(--purple)">gigs_data/{keyword}/</code> as individual JSON files
+    </p>
+  </div>
+</div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let allKeywords = [];
+let scrapeResultPathVal = '';
+let analyzeResultPathVal = '';
+let eventSource = null;
+let activeTab = 'scrape';
+
+// ── Init ──────────────────────────────────────────
+(async () => {
+  await loadKeywords();
+  await loadConfig();
+})();
+
+// ── Tab switching ──────────────────────────────────
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  btn.classList.add('active');
+  activeTab = tab;
+  if (tab === 'analyze') loadKeywords();
+}
+
+// ── Keywords ───────────────────────────────────────
+async function loadKeywords() {
+  const res = await fetch('/api/keywords');
+  allKeywords = await res.json();
+  renderDropdown(allKeywords);
+}
+
+function renderDropdown(list) {
+  const dd = document.getElementById('keywordDropdown');
+  dd.innerHTML = '';
+  if (list.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'dropdown-empty';
+    empty.textContent = 'No scraped keywords found — run a scrape first';
+    dd.appendChild(empty);
+  } else {
+    list.forEach(k => {
+      const item = document.createElement('div');
+      item.className = 'dropdown-item';
+      item.innerHTML = `<span>${escHtml(k.name)}</span><span class="kw-count">${k.count} gig${k.count !== 1 ? 's' : ''}</span>`;
+      // Use mousedown + preventDefault so the input doesn't lose focus before selection registers
+      item.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        selectKeyword(k.name);
+      });
+      dd.appendChild(item);
+    });
+  }
+}
+
+function filterKeywords() {
+  const q = document.getElementById('analyzeInput').value.toLowerCase();
+  const filtered = allKeywords.filter(k => k.name.toLowerCase().includes(q));
+  renderDropdown(filtered);
+  document.getElementById('keywordDropdown').classList.add('open');
+  document.getElementById('analyzeKeyword').value = '';
+}
+
+function openDropdown() {
+  document.getElementById('keywordDropdown').classList.add('open');
+}
+
+function selectKeyword(name) {
+  document.getElementById('analyzeInput').value = name;
+  document.getElementById('analyzeKeyword').value = name;
+  document.getElementById('keywordDropdown').classList.remove('open');
+}
+
+document.addEventListener('click', (e) => {
+  if (!document.getElementById('analyzeSelectWrap').contains(e.target)) {
+    document.getElementById('keywordDropdown').classList.remove('open');
+  }
+});
+
+// ── Config ─────────────────────────────────────────
+async function loadConfig() {
+  const res = await fetch('/api/config');
+  const data = await res.json();
+  document.getElementById('apiKey').value = data.api_key || '';
+}
+
+async function saveConfig() {
+  const api_key = document.getElementById('apiKey').value.trim();
+  const res = await fetch('/api/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ api_key })
+  });
+  if (res.ok) showToast('API key saved!', 'success');
+  else showToast('Failed to save key', 'error');
+}
+
+// ── Logging ────────────────────────────────────────
+function clearLog(id) {
+  document.getElementById(id).innerHTML = '';
+}
+
+const PREFIXES = { log: '›', info: 'i', success: '✓', error: '✗', warning: '!', result: '→' };
+
+function appendLog(terminalId, entry) {
+  if (!entry.data && entry.type !== 'log') return;
+  const terminal = document.getElementById(terminalId);
+  const empty = terminal.querySelector('.empty-msg');
+  if (empty) empty.remove();
+
+  const row = document.createElement('div');
+  row.className = `log-line ${entry.type || 'log'}`;
+  const pfx = PREFIXES[entry.type] || '›';
+  row.innerHTML = `<span class="pfx">${pfx}</span><span class="msg">${escHtml(entry.data || '')}</span>`;
+  terminal.appendChild(row);
+  terminal.scrollTop = terminal.scrollHeight;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Job state ──────────────────────────────────────
+function setRunning(running) {
+  const badge = document.getElementById('statusBadge');
+  document.getElementById('statusText').textContent = running ? 'Running...' : 'Idle';
+  badge.className = 'status-badge' + (running ? ' running' : '');
+
+  document.getElementById('scrapeBtn').disabled = running;
+  document.getElementById('analyzeBtn').disabled = running;
+  document.getElementById('stopScrapeBtn').style.display = running ? '' : 'none';
+  document.getElementById('stopAnalyzeBtn').style.display = running ? '' : 'none';
+}
+
+function connectStream(logId, onResult) {
+  if (eventSource) { eventSource.close(); eventSource = null; }
+
+  eventSource = new EventSource('/api/logs/stream');
+
+  eventSource.onmessage = (e) => {
+    const entry = JSON.parse(e.data);
+
+    if (entry.type === 'stream_end') {
+      eventSource.close();
+      eventSource = null;
+      setRunning(false);
+      return;
+    }
+
+    appendLog(logId, entry);
+
+    if (entry.type === 'result' && entry.data) {
+      if (onResult) onResult(entry.data);
+    }
+  };
+
+  eventSource.onerror = () => {
+    if (eventSource) { eventSource.close(); eventSource = null; }
+    setRunning(false);
+  };
+}
+
+// ── Scrape ─────────────────────────────────────────
+async function startScrape() {
+  const keyword = document.getElementById('scrapeKeyword').value.trim();
+  const pages = parseInt(document.getElementById('scrapePages').value) || 1;
+
+  if (!keyword) { showToast('Please enter a keyword', 'error'); return; }
+
+  clearLog('scrapeLog');
+  document.getElementById('scrapeResult').classList.remove('visible');
+  scrapeResultPathVal = '';
+  setRunning(true);
+
+  const res = await fetch('/api/scrape', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keyword, pages })
+  });
+  const data = await res.json();
+
+  if (!res.ok) {
+    showToast(data.error, 'error');
+    setRunning(false);
+    return;
+  }
+
+  connectStream('scrapeLog', (path) => {
+    scrapeResultPathVal = path;
+    document.getElementById('scrapeResultPath').textContent = path;
+    document.getElementById('scrapeResult').classList.add('visible');
+    loadKeywords();
+    showToast('Scraping complete!', 'success');
+  });
+}
+
+// ── Analyze ────────────────────────────────────────
+async function startAnalyze() {
+  const keyword = document.getElementById('analyzeKeyword').value.trim()
+    || document.getElementById('analyzeInput').value.trim();
+
+  if (!keyword) { showToast('Please select a keyword', 'error'); return; }
+
+  clearLog('analyzeLog');
+  document.getElementById('analyzeResult').classList.remove('visible');
+  analyzeResultPathVal = '';
+  setRunning(true);
+
+  const res = await fetch('/api/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keyword })
+  });
+  const data = await res.json();
+
+  if (!res.ok) {
+    showToast(data.error, 'error');
+    setRunning(false);
+    return;
+  }
+
+  connectStream('analyzeLog', (path) => {
+    analyzeResultPathVal = path;
+    document.getElementById('analyzeResultPath').textContent = path;
+    document.getElementById('analyzeResult').classList.add('visible');
+    showToast('Analysis complete!', 'success');
+  });
+}
+
+// ── Stop ───────────────────────────────────────────
+async function stopJob() {
+  await fetch('/api/stop', { method: 'POST' });
+}
+
+// ── Open folder ────────────────────────────────────
+async function openFolder(pathElemId) {
+  const path = pathElemId === 'scrapeResultPath' ? scrapeResultPathVal : analyzeResultPathVal;
+  if (!path) return;
+  const res = await fetch('/api/open-folder', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path })
+  });
+  const data = await res.json();
+  if (!res.ok) { showToast(data.error || 'Could not open folder', 'error'); return; }
+  // On server: offer file download instead of opening Explorer
+  if (data.download_url) {
+    const a = document.createElement('a');
+    a.href = data.download_url;
+    a.click();
+  }
+}
+
+// ── Toast ──────────────────────────────────────────
+let toastTimer;
+function showToast(msg, type = '') {
+  clearTimeout(toastTimer);
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast show${type ? ' ' + type : ''}`;
+  toastTimer = setTimeout(() => { el.className = 'toast'; }, 3200);
+}
+</script>
+</body>
+</html>

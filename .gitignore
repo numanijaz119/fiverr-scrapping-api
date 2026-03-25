@@ -11,3 +11,4 @@ __pycache__/
 *.pyc
 keyword_analysis/
 .env
+null
