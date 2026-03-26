@@ -30,11 +30,34 @@ def add_log(entry):
         job['logs'].append(entry)
 
 
+_SCRAPER_ERROR_SUBTYPES = {
+    'INVALID_KEY':    ('error',   'invalid_key'),
+    'QUOTA_EXCEEDED': ('error',   'quota_exceeded'),
+    'API_ERROR':      ('error',   'api_error'),
+    'NO_GIGS_FOUND':  ('warning', 'no_gigs_found'),
+}
+
+
+def _classify_line(raw_line):
+    """
+    Return a log entry dict for a raw output line.
+    Lines starting with SCRAPER_ERROR:<SUBTYPE>:<message> become alert events.
+    All other lines are plain log entries.
+    """
+    line = raw_line.rstrip()
+    if line.startswith('SCRAPER_ERROR:'):
+        parts = line.split(':', 2)          # ['SCRAPER_ERROR', 'SUBTYPE', 'message']
+        subtype_key = parts[1] if len(parts) > 1 else 'API_ERROR'
+        message     = parts[2] if len(parts) > 2 else line
+        log_type, subtype = _SCRAPER_ERROR_SUBTYPES.get(subtype_key, ('error', 'api_error'))
+        return {'type': 'alert', 'subtype': subtype, 'level': log_type, 'data': message}
+    return {'type': 'log', 'data': line}
+
+
 def run_process(cmd, on_done):
     env = os.environ.copy()
     env['PYTHONIOENCODING'] = 'utf-8'
     env['PYTHONUNBUFFERED'] = '1'
-    # Insert -u (unbuffered) right after the python executable
     unbuffered_cmd = [cmd[0], '-u'] + cmd[1:]
     try:
         proc = subprocess.Popen(
@@ -51,7 +74,7 @@ def run_process(cmd, on_done):
             job['process'] = proc
 
         for line in proc.stdout:
-            add_log({'type': 'log', 'data': line.rstrip()})
+            add_log(_classify_line(line))
 
         proc.wait()
         on_done(proc.returncode == 0, proc.returncode)
@@ -122,6 +145,37 @@ def start_scrape():
         if success:
             add_log({'type': 'success', 'data': 'Scraping completed successfully!'})
             add_log({'type': 'result', 'data': os.path.join(GIGS_DIR, keyword)})
+        else:
+            add_log({'type': 'error', 'data': f'Scraping failed (exit code {code})'})
+
+    threading.Thread(target=run_process, args=(cmd, on_done), daemon=True).start()
+    return jsonify({'success': True})
+
+
+@app.route('/api/scrape-category', methods=['POST'])
+def start_scrape_category():
+    with job_lock:
+        if job['running']:
+            return jsonify({'error': 'A job is already running'}), 400
+        url   = request.json.get('url', '').strip()
+        pages = int(request.json.get('pages', 1))
+        if not url:
+            return jsonify({'error': 'Category URL is required'}), 400
+        if 'fiverr.com/categories/' not in url:
+            return jsonify({'error': 'URL must be a Fiverr category URL'}), 400
+        job['running'] = True
+        job['done']    = False
+        job['logs']    = []
+        job['process'] = None
+
+    add_log({'type': 'info', 'data': f'Starting category scrape: {url} ({pages} page(s))'})
+
+    cmd = [sys.executable, 'Fiverr_category-Scrapper.py', url, '--pages', str(pages)]
+
+    def on_done(success, code):
+        if success:
+            add_log({'type': 'success', 'data': 'Category scraping completed successfully!'})
+            add_log({'type': 'result',  'data': GIGS_DIR})
         else:
             add_log({'type': 'error', 'data': f'Scraping failed (exit code {code})'})
 

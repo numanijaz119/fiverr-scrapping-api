@@ -9,6 +9,64 @@ SCRAPER_API_URL = "https://api.scraperapi.com/"
 SCRAPER_API_REF = "https://www.scraperapi.com/?fp_ref=enable-fiverr-api"
 
 
+# ---------------------------------------------------------------------------
+# ScraperAPI-specific exceptions
+# ---------------------------------------------------------------------------
+
+class ScraperApiError(Exception):
+    """Base class for ScraperAPI errors."""
+
+class ScraperApiKeyError(ScraperApiError):
+    """Raised when the API key is missing, invalid, or the account is suspended."""
+
+class ScraperApiQuotaError(ScraperApiError):
+    """Raised when the monthly request quota has been exhausted."""
+
+
+# Body fragments ScraperAPI returns on various error conditions
+_QUOTA_PHRASES = [
+    "exceeded your monthly api call limit",
+    "exceeded your monthly limit",
+    "you have used all",
+    "request limit reached",
+    "concurrent request limit",
+]
+_KEY_PHRASES = [
+    "invalid api key",
+    "api key is not valid",
+    "unauthorized",
+    "account suspended",
+    "account is banned",
+]
+
+
+def _check_scraper_api_response(response: 'requests.Response'):
+    """
+    Inspect the ScraperAPI response and raise a descriptive exception when
+    an API-level error is detected (not a Fiverr-side error).
+    """
+    status = response.status_code
+    body   = response.text.lower()
+
+    if status == 401 or any(p in body for p in _KEY_PHRASES):
+        raise ScraperApiKeyError(
+            "ScraperAPI key is invalid or the account is suspended. "
+            "Check your key in Settings."
+        )
+
+    if status == 403 or any(p in body for p in _QUOTA_PHRASES):
+        raise ScraperApiQuotaError(
+            "ScraperAPI monthly quota has been used up. "
+            "Upgrade your plan or wait for the next billing cycle."
+        )
+
+    if status == 429:
+        raise ScraperApiError(
+            "ScraperAPI rate limit hit (too many concurrent requests). "
+            "Try increasing the delay between requests."
+        )
+
+
 class Response(requests.Response):
     soup: 'BeautifulSoup'
 
@@ -55,6 +113,7 @@ class Session(requests.Session):
             }
             url = SCRAPER_API_URL
         response = super().request(method, url, *args, **kwargs)
+        _check_scraper_api_response(response)
         response.__class__ = Response
         response.set_soup()
         return response

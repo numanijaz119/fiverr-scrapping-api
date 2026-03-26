@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from urllib.parse import quote_plus
 from fiverr import session
+from fiverr.utils.req import ScraperApiKeyError, ScraperApiQuotaError, ScraperApiError
 
 try:
     from dotenv import load_dotenv
@@ -339,6 +340,15 @@ def scrape_gig_details(gig_info, delay=2):
         
         return details
         
+    except ScraperApiKeyError as e:
+        print(f"SCRAPER_ERROR:INVALID_KEY:{e}")
+        sys.exit(1)
+    except ScraperApiQuotaError as e:
+        print(f"SCRAPER_ERROR:QUOTA_EXCEEDED:{e}")
+        sys.exit(1)
+    except ScraperApiError as e:
+        print(f"SCRAPER_ERROR:API_ERROR:{e}")
+        sys.exit(1)
     except Exception as e:
         print(f"  ❌ Error scraping {gig_url}: {e}")
         import traceback
@@ -375,30 +385,44 @@ def search_and_scrape_fiverr(keyword, api_key=None, output_dir="gigs_data",
         try:
             encoded_keyword = quote_plus(keyword)
             search_url = f"https://www.fiverr.com/search/gigs?query={encoded_keyword}&page={page}"
-            
+
             print(f"\n📄 Scraping search results page {page}...")
-            
+
             if page > 1:
                 time.sleep(delay)
-            
+
             response = session.get(search_url)
             search_data = response.props_json()
-            
+
             gig_infos = extract_gig_urls_from_search(search_data)
-            
+
             if not gig_infos:
                 print(f"⚠️  No gigs found on page {page}, stopping...")
                 break
-            
+
             all_gig_infos.extend(gig_infos)
-            
+
+        except ScraperApiKeyError as e:
+            print(f"SCRAPER_ERROR:INVALID_KEY:{e}")
+            sys.exit(1)
+        except ScraperApiQuotaError as e:
+            print(f"SCRAPER_ERROR:QUOTA_EXCEEDED:{e}")
+            sys.exit(1)
+        except ScraperApiError as e:
+            print(f"SCRAPER_ERROR:API_ERROR:{e}")
+            sys.exit(1)
         except Exception as e:
             print(f"❌ Error scraping search page {page}: {e}")
             break
     
     print(f"\n✅ Total gigs found: {len(all_gig_infos)}")
     print("=" * 60)
-    
+
+    if not all_gig_infos:
+        print("SCRAPER_ERROR:NO_GIGS_FOUND:No gigs were found for this keyword. "
+              "Try a different keyword or check that it returns results on Fiverr.")
+        sys.exit(1)
+
     # Scrape individual gigs
     scraped_count = 0
     

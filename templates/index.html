@@ -297,6 +297,58 @@ input::placeholder { color: var(--text-dim); }
 .setting-note a { color: var(--accent); text-decoration: none; }
 .setting-note a:hover { text-decoration: underline; }
 
+/* ── Alert banner ── */
+.alert-banner {
+  display: none;
+  align-items: flex-start;
+  gap: 12px;
+  border-radius: 8px;
+  padding: 13px 16px;
+  margin-bottom: 18px;
+  font-size: 13px;
+  line-height: 1.55;
+  border: 1px solid;
+}
+
+.alert-banner.visible { display: flex; }
+
+.alert-banner.level-error {
+  background: #1f0d0d;
+  border-color: #6b2222;
+  color: #f08080;
+}
+
+.alert-banner.level-warning {
+  background: #1c1608;
+  border-color: #6b4e10;
+  color: #e0b46a;
+}
+
+.alert-banner .alert-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+.alert-banner .alert-body { flex: 1; }
+
+.alert-banner .alert-title {
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+
+.alert-banner .alert-msg { opacity: 0.85; }
+
+.alert-banner .alert-dismiss {
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0.5;
+  cursor: pointer;
+  font-size: 16px;
+  flex-shrink: 0;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.alert-banner .alert-dismiss:hover { opacity: 1; }
+
 /* ── Toast ── */
 .toast {
   position: fixed;
@@ -334,6 +386,7 @@ input::placeholder { color: var(--text-dim); }
 
 <nav>
   <button class="active" onclick="switchTab('scrape', this)">Scrape</button>
+  <button onclick="switchTab('category', this)">Category</button>
   <button onclick="switchTab('analyze', this)">Analyze</button>
   <button onclick="switchTab('settings', this)">Settings</button>
 </nav>
@@ -365,6 +418,15 @@ input::placeholder { color: var(--text-dim); }
     </div>
   </div>
 
+  <div class="alert-banner" id="scrapeAlert">
+    <span class="alert-icon" id="scrapeAlertIcon"></span>
+    <div class="alert-body">
+      <div class="alert-title" id="scrapeAlertTitle"></div>
+      <div class="alert-msg"  id="scrapeAlertMsg"></div>
+    </div>
+    <button class="alert-dismiss" onclick="dismissAlert('scrapeAlert')">✕</button>
+  </div>
+
   <div class="card">
     <div class="card-title">Output Log</div>
     <div class="log-terminal" id="scrapeLog">
@@ -373,6 +435,56 @@ input::placeholder { color: var(--text-dim); }
     <div class="result-bar" id="scrapeResult">
       <span class="path" id="scrapeResultPath"></span>
       <button class="btn btn-secondary" onclick="openFolder('scrapeResultPath')">Open Folder</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CATEGORY TAB ═══ -->
+<div class="tab" id="tab-category">
+  <div class="card">
+    <div class="card-title">Scrape Fiverr Gigs by Category URL</div>
+    <div class="form-row">
+      <div class="field grow">
+        <label>Category URL</label>
+        <input type="text" id="categoryUrl"
+          placeholder="https://www.fiverr.com/categories/programming-tech/website-development/custom-websites-development?source=category_filters"
+          onkeydown="if(event.key==='Enter') startCategoryScrape()">
+      </div>
+      <div class="field">
+        <label>Pages</label>
+        <input type="number" id="categoryPages" value="1" min="1" max="100">
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button class="btn btn-primary" id="categoryBtn" onclick="startCategoryScrape()">Start Scraping</button>
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button class="btn btn-danger" id="stopCategoryBtn" onclick="stopJob()" style="display:none">Stop</button>
+      </div>
+    </div>
+    <p class="setting-note" style="margin-top:12px">
+      Paste any Fiverr category page URL. Filters in the URL are preserved — the scraper just adds <code style="color:var(--purple)">&amp;page=N</code> for each page.
+    </p>
+  </div>
+
+  <div class="alert-banner" id="categoryAlert">
+    <span class="alert-icon" id="categoryAlertIcon"></span>
+    <div class="alert-body">
+      <div class="alert-title" id="categoryAlertTitle"></div>
+      <div class="alert-msg"  id="categoryAlertMsg"></div>
+    </div>
+    <button class="alert-dismiss" onclick="dismissAlert('categoryAlert')">✕</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Output Log</div>
+    <div class="log-terminal" id="categoryLog">
+      <div class="empty-msg">Paste a category URL above and click "Start Scraping"</div>
+    </div>
+    <div class="result-bar" id="categoryResult">
+      <span class="path" id="categoryResultPath"></span>
+      <button class="btn btn-secondary" onclick="openFolder('categoryResultPath')">Open Folder</button>
     </div>
   </div>
 </div>
@@ -454,10 +566,39 @@ input::placeholder { color: var(--text-dim); }
 
 <script>
 let allKeywords = [];
-let scrapeResultPathVal = '';
-let analyzeResultPathVal = '';
+let scrapeResultPathVal   = '';
+let categoryResultPathVal = '';
+let analyzeResultPathVal  = '';
 let eventSource = null;
 let activeTab = 'scrape';
+
+// ── Alert definitions ──────────────────────────────
+const ALERT_CONFIGS = {
+  invalid_key: {
+    level: 'error',
+    icon:  '🔑',
+    title: 'Invalid or Missing API Key',
+    msg:   'Your ScraperAPI key is invalid or the account is suspended. Go to Settings to update your key.',
+  },
+  quota_exceeded: {
+    level: 'error',
+    icon:  '🚫',
+    title: 'ScraperAPI Quota Exceeded',
+    msg:   'You have used up your monthly ScraperAPI request quota. Upgrade your plan or wait for the next billing cycle.',
+  },
+  api_error: {
+    level: 'error',
+    icon:  '⚠️',
+    title: 'ScraperAPI Error',
+    msg:   null,   // will use the message from the event
+  },
+  no_gigs_found: {
+    level: 'warning',
+    icon:  '🔍',
+    title: 'No Gigs Found',
+    msg:   null,   // will use the message from the event
+  },
+};
 
 // ── Init ──────────────────────────────────────────
 (async () => {
@@ -572,19 +713,39 @@ function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+// ── Alert banner ───────────────────────────────────
+function showAlert(bannerId, subtype, messageOverride) {
+  const cfg = ALERT_CONFIGS[subtype] || ALERT_CONFIGS['api_error'];
+  const banner = document.getElementById(bannerId);
+  banner.className = `alert-banner visible level-${cfg.level}`;
+  document.getElementById(bannerId + 'Icon').textContent  = cfg.icon;
+  document.getElementById(bannerId + 'Title').textContent = cfg.title;
+  document.getElementById(bannerId + 'Msg').textContent   = cfg.msg || messageOverride || '';
+}
+
+function dismissAlert(bannerId) {
+  document.getElementById(bannerId).classList.remove('visible');
+}
+
+function hideAllAlerts() {
+  document.querySelectorAll('.alert-banner').forEach(b => b.classList.remove('visible'));
+}
+
 // ── Job state ──────────────────────────────────────
 function setRunning(running) {
   const badge = document.getElementById('statusBadge');
   document.getElementById('statusText').textContent = running ? 'Running...' : 'Idle';
   badge.className = 'status-badge' + (running ? ' running' : '');
 
-  document.getElementById('scrapeBtn').disabled = running;
-  document.getElementById('analyzeBtn').disabled = running;
-  document.getElementById('stopScrapeBtn').style.display = running ? '' : 'none';
-  document.getElementById('stopAnalyzeBtn').style.display = running ? '' : 'none';
+  document.getElementById('scrapeBtn').disabled   = running;
+  document.getElementById('categoryBtn').disabled = running;
+  document.getElementById('analyzeBtn').disabled  = running;
+  document.getElementById('stopScrapeBtn').style.display   = running ? '' : 'none';
+  document.getElementById('stopCategoryBtn').style.display = running ? '' : 'none';
+  document.getElementById('stopAnalyzeBtn').style.display  = running ? '' : 'none';
 }
 
-function connectStream(logId, onResult) {
+function connectStream(logId, onResult, alertId) {
   if (eventSource) { eventSource.close(); eventSource = null; }
 
   eventSource = new EventSource('/api/logs/stream');
@@ -596,6 +757,13 @@ function connectStream(logId, onResult) {
       eventSource.close();
       eventSource = null;
       setRunning(false);
+      return;
+    }
+
+    if (entry.type === 'alert' && alertId) {
+      showAlert(alertId, entry.subtype, entry.data);
+      // Also log it so it's visible in the terminal
+      appendLog(logId, { type: entry.level === 'error' ? 'error' : 'warning', data: entry.data });
       return;
     }
 
@@ -621,6 +789,7 @@ async function startScrape() {
 
   clearLog('scrapeLog');
   document.getElementById('scrapeResult').classList.remove('visible');
+  dismissAlert('scrapeAlert');
   scrapeResultPathVal = '';
   setRunning(true);
 
@@ -643,7 +812,45 @@ async function startScrape() {
     document.getElementById('scrapeResult').classList.add('visible');
     loadKeywords();
     showToast('Scraping complete!', 'success');
+  }, 'scrapeAlert');
+}
+
+// ── Category Scrape ────────────────────────────────
+async function startCategoryScrape() {
+  const url   = document.getElementById('categoryUrl').value.trim();
+  const pages = parseInt(document.getElementById('categoryPages').value) || 1;
+
+  if (!url) { showToast('Please enter a category URL', 'error'); return; }
+  if (!url.includes('fiverr.com/categories/')) {
+    showToast('URL must be a Fiverr category URL', 'error'); return;
+  }
+
+  clearLog('categoryLog');
+  document.getElementById('categoryResult').classList.remove('visible');
+  dismissAlert('categoryAlert');
+  categoryResultPathVal = '';
+  setRunning(true);
+
+  const res  = await fetch('/api/scrape-category', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, pages })
   });
+  const data = await res.json();
+
+  if (!res.ok) {
+    showToast(data.error, 'error');
+    setRunning(false);
+    return;
+  }
+
+  connectStream('categoryLog', (path) => {
+    categoryResultPathVal = path;
+    document.getElementById('categoryResultPath').textContent = path;
+    document.getElementById('categoryResult').classList.add('visible');
+    loadKeywords();
+    showToast('Category scraping complete!', 'success');
+  }, 'categoryAlert');
 }
 
 // ── Analyze ────────────────────────────────────────
@@ -686,7 +893,12 @@ async function stopJob() {
 
 // ── Open folder ────────────────────────────────────
 async function openFolder(pathElemId) {
-  const path = pathElemId === 'scrapeResultPath' ? scrapeResultPathVal : analyzeResultPathVal;
+  const pathMap = {
+    scrapeResultPath:   scrapeResultPathVal,
+    categoryResultPath: categoryResultPathVal,
+    analyzeResultPath:  analyzeResultPathVal,
+  };
+  const path = pathMap[pathElemId] || '';
   if (!path) return;
   const res = await fetch('/api/open-folder', {
     method: 'POST',
