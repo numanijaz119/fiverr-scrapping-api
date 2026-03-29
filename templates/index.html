@@ -493,9 +493,11 @@ input::placeholder { color: var(--text-dim); }
 <div class="tab" id="tab-analyze">
   <div class="card">
     <div class="card-title">Analyze Scraped Data</div>
+
+    <!-- Row 1: keyword selector + Analyze button -->
     <div class="form-row">
       <div class="field grow">
-        <label>Select Keyword</label>
+        <label>Select Keyword / Category</label>
         <div class="search-select" id="analyzeSelectWrap">
           <input type="text" id="analyzeInput" placeholder="Search or select a scraped keyword..."
             autocomplete="off"
@@ -514,6 +516,17 @@ input::placeholder { color: var(--text-dim); }
         <button class="btn btn-danger" id="stopAnalyzeBtn" onclick="stopJob()" style="display:none">Stop</button>
       </div>
     </div>
+
+    <!-- Row 2: export buttons (require Analyze to have been run first) -->
+    <div class="form-row" style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border)">
+      <div class="field" style="flex:1">
+        <label>Keyword Research Exports &mdash; requires Analyze to be run first</label>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:4px">
+          <button class="btn btn-secondary" id="extractKwBtn" onclick="startExtract('keywords')">Extract Keywords &amp; Titles</button>
+          <button class="btn btn-secondary" id="extractPkgBtn" onclick="startExtract('packages')">Extract Packages</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="card">
@@ -524,6 +537,10 @@ input::placeholder { color: var(--text-dim); }
     <div class="result-bar" id="analyzeResult">
       <span class="path" id="analyzeResultPath"></span>
       <button class="btn btn-secondary" onclick="openFolder('analyzeResultPath')">Open Output Folder</button>
+    </div>
+    <div class="result-bar" id="extractResult" style="margin-top:8px">
+      <span class="path" id="extractResultPath"></span>
+      <button class="btn btn-secondary" onclick="openFolder('extractResultPath')">Open File</button>
     </div>
   </div>
 </div>
@@ -569,6 +586,7 @@ let allKeywords = [];
 let scrapeResultPathVal   = '';
 let categoryResultPathVal = '';
 let analyzeResultPathVal  = '';
+let extractResultPathVal  = '';
 let eventSource = null;
 let activeTab = 'scrape';
 
@@ -737,9 +755,11 @@ function setRunning(running) {
   document.getElementById('statusText').textContent = running ? 'Running...' : 'Idle';
   badge.className = 'status-badge' + (running ? ' running' : '');
 
-  document.getElementById('scrapeBtn').disabled   = running;
-  document.getElementById('categoryBtn').disabled = running;
-  document.getElementById('analyzeBtn').disabled  = running;
+  document.getElementById('scrapeBtn').disabled     = running;
+  document.getElementById('categoryBtn').disabled   = running;
+  document.getElementById('analyzeBtn').disabled    = running;
+  document.getElementById('extractKwBtn').disabled  = running;
+  document.getElementById('extractPkgBtn').disabled = running;
   document.getElementById('stopScrapeBtn').style.display   = running ? '' : 'none';
   document.getElementById('stopCategoryBtn').style.display = running ? '' : 'none';
   document.getElementById('stopAnalyzeBtn').style.display  = running ? '' : 'none';
@@ -886,6 +906,41 @@ async function startAnalyze() {
   });
 }
 
+// ── Extract ────────────────────────────────────────
+async function startExtract(type) {
+  const keyword = document.getElementById('analyzeKeyword').value.trim()
+    || document.getElementById('analyzeInput').value.trim();
+
+  if (!keyword) { showToast('Please select a keyword first', 'error'); return; }
+
+  clearLog('analyzeLog');
+  document.getElementById('analyzeResult').classList.remove('visible');
+  document.getElementById('extractResult').classList.remove('visible');
+  extractResultPathVal = '';
+  setRunning(true);
+
+  const res  = await fetch('/api/extract', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keyword, type })
+  });
+  const data = await res.json();
+
+  if (!res.ok) {
+    showToast(data.error, 'error');
+    setRunning(false);
+    return;
+  }
+
+  const label = type === 'keywords' ? 'Keywords & Titles' : 'Packages';
+  connectStream('analyzeLog', (path) => {
+    extractResultPathVal = path;
+    document.getElementById('extractResultPath').textContent = path;
+    document.getElementById('extractResult').classList.add('visible');
+    showToast(`${label} extraction complete!`, 'success');
+  });
+}
+
 // ── Stop ───────────────────────────────────────────
 async function stopJob() {
   await fetch('/api/stop', { method: 'POST' });
@@ -897,6 +952,7 @@ async function openFolder(pathElemId) {
     scrapeResultPath:   scrapeResultPathVal,
     categoryResultPath: categoryResultPathVal,
     analyzeResultPath:  analyzeResultPathVal,
+    extractResultPath:  extractResultPathVal,
   };
   const path = pathMap[pathElemId] || '';
   if (!path) return;

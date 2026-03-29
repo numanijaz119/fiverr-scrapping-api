@@ -183,6 +183,47 @@ def start_scrape_category():
     return jsonify({'success': True})
 
 
+@app.route('/api/extract', methods=['POST'])
+def start_extract():
+    with job_lock:
+        if job['running']:
+            return jsonify({'error': 'A job is already running'}), 400
+        extract_type = request.json.get('type', '').strip()   # 'keywords' or 'packages'
+        keyword      = request.json.get('keyword', '').strip()
+        if not keyword:
+            return jsonify({'error': 'Keyword is required'}), 400
+        if extract_type not in ('keywords', 'packages'):
+            return jsonify({'error': 'Invalid extract type'}), 400
+
+        analysis_file = os.path.join(ANALYSIS_DIR, f'{keyword}_analysis.json')
+        if not os.path.exists(analysis_file):
+            return jsonify({'error': f'No analysis file found for "{keyword}". Run Analyze first.'}), 400
+
+        job['running'] = True
+        job['done']    = False
+        job['logs']    = []
+        job['process'] = None
+
+    script     = 'extract_keywords.py' if extract_type == 'keywords' else 'extract_packages.py'
+    suffix     = '_keywords.txt' if extract_type == 'keywords' else '_packages.txt'
+    output_file = os.path.join(ANALYSIS_DIR, f'{keyword}_analysis{suffix}')
+    label      = 'Keywords' if extract_type == 'keywords' else 'Packages'
+
+    add_log({'type': 'info', 'data': f'Extracting {label} for: "{keyword}"'})
+
+    cmd = [sys.executable, script, analysis_file, '--output', output_file]
+
+    def on_done(success, code):
+        if success:
+            add_log({'type': 'success', 'data': f'{label} extraction complete!'})
+            add_log({'type': 'result',  'data': output_file})
+        else:
+            add_log({'type': 'error', 'data': f'Extraction failed (exit code {code})'})
+
+    threading.Thread(target=run_process, args=(cmd, on_done), daemon=True).start()
+    return jsonify({'success': True})
+
+
 @app.route('/api/analyze', methods=['POST'])
 def start_analyze():
     with job_lock:
