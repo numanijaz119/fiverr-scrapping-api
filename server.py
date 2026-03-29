@@ -106,8 +106,10 @@ def get_keywords():
 
 @app.route('/api/config', methods=['GET'])
 def get_config():
-    key = ''
-    if os.path.exists(ENV_FILE):
+    # Check live environment first (covers Render dashboard env vars),
+    # then fall back to the .env file (covers local use).
+    key = os.environ.get('SCRAPER_API_KEY', '')
+    if not key and os.path.exists(ENV_FILE):
         with open(ENV_FILE) as f:
             for line in f:
                 if line.startswith('SCRAPER_API_KEY='):
@@ -118,6 +120,10 @@ def get_config():
 @app.route('/api/config', methods=['POST'])
 def save_config():
     api_key = request.json.get('api_key', '').strip()
+    # Update the running process immediately so scrapers pick it up
+    # without needing a restart.
+    os.environ['SCRAPER_API_KEY'] = api_key
+    # Also persist to .env for local use.
     with open(ENV_FILE, 'w') as f:
         f.write(f'SCRAPER_API_KEY={api_key}\n')
     return jsonify({'success': True})
@@ -150,6 +156,35 @@ def start_scrape():
 
     threading.Thread(target=run_process, args=(cmd, on_done), daemon=True).start()
     return jsonify({'success': True})
+
+
+@app.route('/api/test-key', methods=['POST'])
+def test_key():
+    import requests as req
+    api_key = request.json.get('api_key', '').strip() or os.environ.get('SCRAPER_API_KEY', '')
+    if not api_key:
+        return jsonify({'success': False, 'error': 'No API key provided'})
+    try:
+        r = req.get(
+            'https://api.scraperapi.com/account',
+            params={'api_key': api_key},
+            timeout=10
+        )
+        if r.status_code == 200:
+            data = r.json()
+            return jsonify({
+                'success': True,
+                'plan':      data.get('plan_name', 'Unknown'),
+                'used':      data.get('request_count', 0),
+                'limit':     data.get('request_limit', 0),
+                'remaining': data.get('remaining_api_calls', 0),
+            })
+        elif r.status_code == 403:
+            return jsonify({'success': False, 'error': 'Invalid API key'})
+        else:
+            return jsonify({'success': False, 'error': f'ScraperAPI returned status {r.status_code}'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 
 @app.route('/api/scrape-category', methods=['POST'])

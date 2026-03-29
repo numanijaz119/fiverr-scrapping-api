@@ -559,8 +559,15 @@ input::placeholder { color: var(--text-dim); }
         <label>&nbsp;</label>
         <button class="btn btn-primary" onclick="saveConfig()">Save Key</button>
       </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button class="btn btn-secondary" id="testKeyBtn" onclick="testKey()">Test Key</button>
+      </div>
     </div>
-    <p class="setting-note">
+
+    <div id="keyTestResult" style="display:none; margin-top:14px; padding:12px 14px; border-radius:6px; font-size:13px; border:1px solid; line-height:1.7"></div>
+
+    <p class="setting-note" style="margin-top:12px">
       The scraper uses ScraperAPI to reliably access Fiverr without getting blocked.<br>
       Get your free API key at <a href="https://www.scraperapi.com" target="_blank">scraperapi.com</a>
       (free tier: 5,000 requests/month).
@@ -693,6 +700,45 @@ async function loadConfig() {
   const res = await fetch('/api/config');
   const data = await res.json();
   document.getElementById('apiKey').value = data.api_key || '';
+}
+
+async function testKey() {
+  const api_key = document.getElementById('apiKey').value.trim();
+  const btn     = document.getElementById('testKeyBtn');
+  const box     = document.getElementById('keyTestResult');
+
+  btn.disabled      = true;
+  btn.textContent   = 'Testing...';
+  box.style.display = 'none';
+
+  const res  = await fetch('/api/test-key', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ api_key })
+  });
+  const data = await res.json();
+
+  btn.disabled    = false;
+  btn.textContent = 'Test Key';
+  box.style.display = 'block';
+
+  if (data.success) {
+    const pct = data.limit > 0 ? Math.round((data.used / data.limit) * 100) : 0;
+    box.style.background    = '#0b1f12';
+    box.style.borderColor   = '#1e3d2a';
+    box.style.color         = '#6fcf97';
+    box.innerHTML = `
+      <strong>Key is valid</strong><br>
+      Plan: ${escHtml(data.plan)}<br>
+      Requests used: ${data.used.toLocaleString()} / ${data.limit.toLocaleString()} (${pct}%)<br>
+      Remaining: <strong>${data.remaining.toLocaleString()}</strong>
+    `;
+  } else {
+    box.style.background  = '#1f0d0d';
+    box.style.borderColor = '#6b2222';
+    box.style.color       = '#f08080';
+    box.innerHTML = `<strong>Key failed:</strong> ${escHtml(data.error)}`;
+  }
 }
 
 async function saveConfig() {
